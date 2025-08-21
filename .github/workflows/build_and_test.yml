@@ -1,0 +1,65 @@
+# Name of the workflow, which will be displayed in the GitHub Actions tab
+name: Build & Test Flutter App
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  # Triggers the workflow on pull request events targeting the "main" branch
+  pull_request:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Step 1: Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: 1. Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Sets up the Java Development Kit (JDK) environment needed for Android builds
+      - name: 2. Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # Step 3: Sets up the Flutter SDK in the runner
+      - name: 3. Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0' # Specify your Flutter version
+          channel: 'stable'
+          cache: true # Caches Flutter dependencies for faster builds
+
+      # Step 4: Installs the project dependencies
+      - name: 4. Install dependencies
+        run: flutter pub get
+
+      # Step 5: Runs the Dart analyzer to check for code issues
+      - name: 5. Analyze code
+        run: flutter analyze
+
+      # Step 6: Runs all your automated tests
+      - name: 6. Run tests
+        run: flutter test
+
+      # Step 7: Builds the release APK for Android
+      - name: 7. Build Android APK
+        run: flutter build apk --release
+
+      # Step 8: Uploads the built APK as a downloadable artifact
+      - name: 8. Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
