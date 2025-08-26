@@ -50,4 +50,4 @@ app.*.map.json
 # 🔑 Signing keys (keystore & properties)
 key.properties
 upload-keystore.jks
-
+*.jks

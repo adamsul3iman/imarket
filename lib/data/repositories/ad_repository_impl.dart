@@ -4,17 +4,19 @@ import 'package:imarket/data/datasources/ad_local_data_source.dart';
 import 'package:imarket/data/datasources/ad_remote_data_source.dart';
 import 'package:imarket/domain/entities/ad.dart';
 import 'package:imarket/domain/repositories/ad_repository.dart';
+import 'package:imarket/domain/usecases/get_market_analysis_usecase.dart';
 import 'package:imarket/domain/usecases/report_ad_usecase.dart';
+import 'package:imarket/domain/usecases/submit_ad_usecase.dart';
 import 'package:injectable/injectable.dart';
 
 @LazySingleton(as: AdRepository)
 class AdRepositoryImpl implements AdRepository {
   final AdRemoteDataSource remoteDataSource;
-  final AdLocalDataSource localDataSource; // 1. Add the local data source
+  final AdLocalDataSource localDataSource;
 
   AdRepositoryImpl({
     required this.remoteDataSource,
-    required this.localDataSource, // 2. Inject it via the constructor
+    required this.localDataSource,
   });
 
   @override
@@ -23,32 +25,36 @@ class AdRepositoryImpl implements AdRepository {
     Map<String, dynamic> filters = const {},
     int page = 0,
   }) async {
-    // We can add a network connectivity check here in the future
     try {
-      // 3. Always try to fetch from the remote source first
-      final remoteAds = await remoteDataSource.fetchAds(
+      final rawAds = await remoteDataSource.fetchAds(
         searchText: searchText,
         filters: filters,
         page: page,
       );
-      // 4. If successful, cache the new data
+      final remoteAds = rawAds.map((json) => Ad.fromMap(json)).toList();
       await localDataSource.cacheAds(remoteAds);
       return Right(remoteAds);
     } on Exception {
-      // 5. If remote fetching fails (e.g., no internet)...
       try {
-        // ...try to get the data from the local cache instead.
         final localAds = await localDataSource.getLastAds();
         return Right(localAds);
       } catch (e) {
-        // 6. If both remote and local fail, return a failure.
-        return Left(const ServerFailure(message: 'فشل تحميل البيانات. يرجى التحقق من اتصالك بالإنترنت.'));
+        return Left(const ServerFailure(
+            message: 'فشل تحميل البيانات. يرجى التحقق من اتصالك بالإنترنت.'));
       }
     }
   }
 
-  // --- Other methods remain unchanged for now ---
-  // We can add caching for them later if needed.
+  @override
+  Future<Either<Failure, List<Ad>>> fetchAdsByModel(String model) async {
+    try {
+      final rawAds = await remoteDataSource.fetchAdsByModel(model);
+      final adModels = rawAds.map((json) => Ad.fromMap(json)).toList();
+      return Right(adModels);
+    } on Exception catch (e) {
+      return Left(ServerFailure(message: e.toString()));
+    }
+  }
 
   @override
   Future<Either<Failure, String>> getSellerName(String userId) async {
@@ -81,7 +87,9 @@ class AdRepositoryImpl implements AdRepository {
   @override
   Future<Either<Failure, List<Ad>>> getFavoriteAds() async {
     try {
-      return Right(await remoteDataSource.getFavoriteAds());
+      final rawAds = await remoteDataSource.getFavoriteAds();
+      final adModels = rawAds.map((json) => Ad.fromMap(json)).toList();
+      return Right(adModels);
     } on Exception {
       return Left(const ServerFailure());
     }
@@ -99,7 +107,9 @@ class AdRepositoryImpl implements AdRepository {
   @override
   Future<Either<Failure, List<Ad>>> getUserAds(String userId) async {
     try {
-      return Right(await remoteDataSource.getUserAds(userId));
+      final rawAds = await remoteDataSource.getUserAds(userId);
+      final adModels = rawAds.map((json) => Ad.fromMap(json)).toList();
+      return Right(adModels);
     } on Exception {
       return Left(const ServerFailure());
     }
@@ -142,20 +152,43 @@ class AdRepositoryImpl implements AdRepository {
   }
 
   @override
-  Future<Either<Failure, void>> toggleFavoriteStatus(String adId, bool isCurrentlyFavorited) async {
+  Future<Either<Failure, void>> toggleFavoriteStatus(
+      String adId, bool isCurrentlyFavorited) async {
     try {
-      return Right(await remoteDataSource.toggleFavoriteStatus(adId, isCurrentlyFavorited));
+      return Right(await remoteDataSource.toggleFavoriteStatus(
+          adId, isCurrentlyFavorited));
     } on Exception {
       return Left(const ServerFailure());
     }
   }
 
   @override
-  Future<Either<Failure, void>> updateAdStatus(String adId, String status) async {
+  Future<Either<Failure, void>> updateAdStatus(
+      String adId, String status) async {
     try {
       return Right(await remoteDataSource.updateAdStatus(adId, status));
     } on Exception {
       return Left(const ServerFailure());
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> submitAd(SubmitAdParams params) async {
+    try {
+      await remoteDataSource.submitAd(params);
+      return const Right(null);
+    } on Exception catch (e) {
+      return Left(ServerFailure(message: e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, MarketAnalysis>> getMarketAnalysis(String adId) async {
+    try {
+      final result = await remoteDataSource.getMarketAnalysis(adId);
+      return Right(MarketAnalysis.fromMap(result));
+    } on Exception {
+      return Left(const ServerFailure(message: 'Failed to get market analysis.'));
     }
   }
 }

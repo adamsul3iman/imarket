@@ -1,6 +1,6 @@
-// lib/presentation/blocs/profile/profile_bloc.dart
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:imarket/domain/entities/user_profile.dart';
 import 'package:imarket/domain/usecases/get_user_profile_usecase.dart';
 import 'package:injectable/injectable.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -18,7 +18,7 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     on<SignOutEvent>(_onSignOut);
   }
 
-  Future<void> _onLoadData(event, emit) async {
+  Future<void> _onLoadData(LoadProfileDataEvent event, Emitter<ProfileState> emit) async {
     emit(ProfileLoading());
 
     final user = _supabaseClient.auth.currentUser;
@@ -28,13 +28,14 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
     }
 
     final failureOrProfile = await _getUserProfileUseCase.call(user.id);
+    
     failureOrProfile.fold(
       (failure) => emit(ProfileError(message: failure.message)),
       (userProfile) => emit(ProfileLoaded(userProfile: userProfile)),
     );
   }
 
-  Future<void> _onSignOut(event, emit) async {
+  Future<void> _onSignOut(SignOutEvent event, Emitter<ProfileState> emit) async {
     await _supabaseClient.auth.signOut();
     emit(ProfileLoggedOut());
   }

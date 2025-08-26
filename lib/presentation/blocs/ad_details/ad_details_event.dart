@@ -10,8 +10,9 @@ abstract class AdDetailsEvent extends Equatable {
 class LoadAdDetailsEvent extends AdDetailsEvent {
   final String adId;
   final String userId;
+  final String model; // NEW: تم إضافة model
 
-  const LoadAdDetailsEvent({required this.adId, required this.userId});
+  const LoadAdDetailsEvent({required this.adId, required this.userId, required this.model});
 }
 
 class ReportAdEvent extends AdDetailsEvent {
@@ -32,4 +33,10 @@ class LaunchCallEvent extends AdDetailsEvent {
   final String phoneNumber;
 
   const LaunchCallEvent({required this.phoneNumber});
+}
+
+class LoadRelatedAdsEvent extends AdDetailsEvent { // NEW: تم إضافة هذا الحدث
+  final String model;
+
+  const LoadRelatedAdsEvent({required this.model});
 }

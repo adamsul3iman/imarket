@@ -1,27 +1,62 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:imarket/main.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'otp_verification_screen.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:imarket/core/di/dependency_injection.dart';
+import 'package:imarket/presentation/blocs/account_settings/account_settings_bloc.dart';
 
-class AccountSettingsScreen extends StatefulWidget {
+/// شاشة تسمح للمستخدم بتعديل بيانات حسابه الشخصي مثل الاسم ورقم الهاتف.
+class AccountSettingsScreen extends StatelessWidget {
   const AccountSettingsScreen({super.key});
 
   @override
-  State<AccountSettingsScreen> createState() => _AccountSettingsScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => getIt<AccountSettingsBloc>()..add(LoadAccountData()),
+      child: BlocListener<AccountSettingsBloc, AccountSettingsState>(
+        listener: (context, state) {
+          if (state.status == AccountSettingsStatus.success) {
+            if (state.navigateToOtp) {
+              // في حال تغيير رقم الهاتف، يتم الانتقال إلى شاشة تفعيل الرمز
+              // context.push('/otp-verification', extra: {'phone': '+962${state.phoneNumber}'});
+            } else {
+              // في حال نجاح التحديث (بدون تغيير الرقم)
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(const SnackBar(
+                  content: Text('تم تحديث بياناتك بنجاح!'),
+                  backgroundColor: Colors.green,
+                ));
+              context.pop();
+            }
+          } else if (state.status == AccountSettingsStatus.failure) {
+            // في حال فشل التحديث
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(
+                content: Text(state.errorMessage ?? 'حدث خطأ'),
+                backgroundColor: Colors.red,
+              ));
+          }
+        },
+        child: const _AccountSettingsView(),
+      ),
+    );
+  }
 }
 
-class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
-  final _profileFormKey = GlobalKey<FormState>();
-  final _fullNameController = TextEditingController();
-  final _phoneNumberController = TextEditingController();
-  bool _isProfileSaving = false;
+/// الواجهة الفعلية للشاشة، تستخدم StatefulWidget لإدارة الـ Controllers.
+class _AccountSettingsView extends StatefulWidget {
+  const _AccountSettingsView();
 
   @override
-  void initState() {
-    super.initState();
-    _loadUserProfile();
-  }
+  State<_AccountSettingsView> createState() => _AccountSettingsViewState();
+}
+
+class _AccountSettingsViewState extends State<_AccountSettingsView> {
+  final _formKey = GlobalKey<FormState>();
+  final _fullNameController = TextEditingController();
+  final _phoneNumberController = TextEditingController();
 
   @override
   void dispose() {
@@ -30,135 +65,100 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     super.dispose();
   }
 
-  Future<void> _loadUserProfile() async {
-    final user = supabase.auth.currentUser;
-    if (user != null && mounted) {
-      setState(() {
-        _fullNameController.text =
-            user.userMetadata?['full_name'] as String? ?? '';
-        _phoneNumberController.text =
-            user.phone?.replaceFirst('+962', '') ?? '';
-      });
-    }
-  }
-
-  /// Updates the user's profile information and handles phone verification.
-  Future<void> _updateProfile() async {
-    if (!_profileFormKey.currentState!.validate() || !mounted) return;
-    setState(() => _isProfileSaving = true);
-
-    final newPhoneNumber = '+962${_phoneNumberController.text.trim()}';
-    final user = supabase.auth.currentUser;
-    final isPhoneChanged = newPhoneNumber != user?.phone;
-
-    try {
-      await supabase.auth.updateUser(UserAttributes(
-        phone: newPhoneNumber,
-        data: {'full_name': _fullNameController.text.trim()},
-      ));
-
-      if (mounted) {
-        // *** THE FIX IS HERE ***
-        // Check if the phone number was changed to decide the next step.
-        if (isPhoneChanged) {
-          // If the phone number changed, navigate to the OTP screen for verification.
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => OtpVerificationScreen(
-                phoneNumber: newPhoneNumber,
-                otpType: OtpType.phoneChange,
-              ),
-            ),
-          );
-        } else {
-          // If only the name was changed, just show a success message and go back.
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                // <<< التحسين: رسالة أكثر دقة.
-                content: Text('تم تحديث بياناتك بنجاح!'),
-                backgroundColor: Colors.green),
-          );
-          Navigator.pop(context);
-        }
-      }
-    } on AuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ في التحديث: ${e.message}')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isProfileSaving = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('إعدادات الحساب'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _profileFormKey,
-          child: Card(
-            elevation: 2,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextFormField(
-                    controller: _fullNameController,
-                    decoration: const InputDecoration(
-                        labelText: 'الاسم الكامل',
-                        prefixIcon: Icon(Icons.person_outline)),
-                    validator: (value) =>
-                        value == null || value.isEmpty ? 'الاسم مطلوب' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _phoneNumberController,
-                    decoration: const InputDecoration(
-                        labelText: 'رقم الهاتف',
-                        prefixText: '+962 ',
-                        prefixIcon: Icon(Icons.phone_outlined)),
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(9),
-                    ],
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'رقم الهاتف مطلوب';
-                      }
-                      if (!value.startsWith('7')) {
-                        return 'يجب أن يبدأ الرقم بالرقم 7';
-                      }
-                      if (value.length != 9) {
-                        return 'يجب أن يتكون الرقم من 9 أرقام';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 32),
-                  _isProfileSaving
-                      ? const Center(child: CircularProgressIndicator())
-                      : ElevatedButton(
-                          onPressed: _updateProfile,
-                          child: const Text('حفظ التغييرات'),
+      appBar: AppBar(title: const Text('إعدادات الحساب')),
+      body: BlocConsumer<AccountSettingsBloc, AccountSettingsState>(
+        listenWhen: (p, c) => p.status != c.status,
+        listener: (context, state) {
+          // مزامنة الـ Controllers مع بيانات الحالة عند تحميلها
+          if (state.status == AccountSettingsStatus.loaded) {
+            _fullNameController.text = state.fullName;
+            _phoneNumberController.text = state.phoneNumber;
+          }
+        },
+        builder: (context, state) {
+          if (state.status == AccountSettingsStatus.loading ||
+              state.status == AccountSettingsStatus.initial) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Form(
+              key: _formKey,
+              child: Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextFormField(
+                        controller: _fullNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'الاسم الكامل',
+                          prefixIcon: Icon(Icons.person_outline),
                         ),
-                ],
+                        onChanged: (value) => context
+                            .read<AccountSettingsBloc>()
+                            .add(FullNameChanged(value)),
+                        validator: (value) => value == null || value.isEmpty
+                            ? 'الاسم مطلوب'
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _phoneNumberController,
+                        decoration: const InputDecoration(
+                          labelText: 'رقم الهاتف',
+                          prefixText: '+962 ',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                        ),
+                        onChanged: (value) => context
+                            .read<AccountSettingsBloc>()
+                            .add(PhoneNumberChanged(value)),
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(9),
+                        ],
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'رقم الهاتف مطلوب';
+                          }
+                          if (!value.startsWith('7')) {
+                            return 'يجب أن يبدأ الرقم بالرقم 7';
+                          }
+                          if (value.length != 9) {
+                            return 'يجب أن يتكون الرقم من 9 أرقام';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 32),
+                      state.status == AccountSettingsStatus.submitting
+                          ? const Center(child: CircularProgressIndicator())
+                          : ElevatedButton(
+                              onPressed: () {
+                                if (_formKey.currentState?.validate() == true) {
+                                  context
+                                      .read<AccountSettingsBloc>()
+                                      .add(SubmitAccountChanges());
+                                }
+                              },
+                              child: const Text('حفظ التغييرات'),
+                            ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

@@ -1,10 +1,10 @@
-// lib/presentation/screens/main_screen.dart
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
-import 'favorites_screen.dart';
-import 'dashboard_screen.dart';
-import 'profile_screen.dart';
+import 'package:imarket/presentation/screens/dashboard_screen.dart';
+import 'package:imarket/presentation/screens/favorites_screen.dart';
+import 'package:imarket/presentation/screens/home_screen.dart';
+import 'package:imarket/presentation/screens/profile_screen.dart';
 
+/// الشاشة الرئيسية التي تحتوي على شريط التنقل السفلي (BottomNavBar) وتستضيف الشاشات الرئيسية الأخرى.
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
   @override
@@ -21,12 +21,12 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
-    // FIX: Removed all the old parameters that are no longer needed
-    // The screens are now self-contained thanks to their BLoCs.
+    // ✅ FIX: The list now contains the simple FavoritesScreen()
     final List<Widget> screens = <Widget>[
       const HomeScreen(),
-      FavoritesScreen(onNavigateToHome: _navigateToHome),
+      const FavoritesScreen(), // No parameters needed
       const DashboardScreen(),
       const ProfileScreen(),
     ];
@@ -44,10 +44,22 @@ class _MainScreenState extends State<MainScreen> {
           });
         },
         items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'الرئيسية'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite_border), activeIcon: Icon(Icons.favorite), label: 'المفضلة'),
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), activeIcon: Icon(Icons.dashboard), label: 'لوحة التحكم'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outlined), activeIcon: Icon(Icons.person), label: 'حسابي'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'الرئيسية'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.favorite_border),
+              activeIcon: Icon(Icons.favorite),
+              label: 'المفضلة'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard_outlined),
+              activeIcon: Icon(Icons.dashboard),
+              label: 'لوحة التحكم'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person_outlined),
+              activeIcon: Icon(Icons.person),
+              label: 'حسابي'),
         ],
       ),
     );

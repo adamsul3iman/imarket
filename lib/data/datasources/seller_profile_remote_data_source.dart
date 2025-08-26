@@ -8,7 +8,8 @@ abstract class SellerProfileRemoteDataSource {
 }
 
 @LazySingleton(as: SellerProfileRemoteDataSource)
-class SellerProfileRemoteDataSourceImpl implements SellerProfileRemoteDataSource {
+class SellerProfileRemoteDataSourceImpl
+    implements SellerProfileRemoteDataSource {
   final SupabaseClient _supabase;
 
   SellerProfileRemoteDataSourceImpl(this._supabase);
@@ -16,23 +17,33 @@ class SellerProfileRemoteDataSourceImpl implements SellerProfileRemoteDataSource
   @override
   Future<SellerProfileData> getSellerProfileData(String sellerId) async {
     try {
-      final responses = await Future.wait([
-        _supabase.from('ads').select().eq('user_id', sellerId).order('created_at', ascending: false),
-        _supabase.from('reviews').select('*, profiles!reviewer_id(full_name)').eq('seller_id', sellerId).order('created_at', ascending: false),
-        _supabase.from('profiles').select('rating').eq('id', sellerId).single(),
-      ]);
+      // ✅ FIX: Renamed 'phone_number' to 'phone_number:phone'
+      // This tells Supabase: "get the column named 'phone', but send it back to the app with the key 'phone_number'".
+      final response = await _supabase.from('profiles').select('''
+            phone_number:phone, 
+            rating,
+            ads:ads!user_id(*),
+            reviews:reviews!seller_id(*, reviewer:profiles!reviewer_id(full_name))
+          ''').eq('id', sellerId).single();
 
-      final adList = (responses[0] as List).map((data) => Ad.fromMap(data)).toList();
-      final reviewList = (responses[1] as List).map((data) => ReviewEntity.fromMap(data)).toList();
-      final ratingData = responses[2] as Map<String, dynamic>;
-      final averageRating = (ratingData['rating'] as num?)?.toDouble() ?? 0.0;
-      
+      final adList =
+          (response['ads'] as List).map((data) => Ad.fromMap(data)).toList();
+
+      final reviewList = (response['reviews'] as List)
+          .map((data) => ReviewEntity.fromMap(data))
+          .toList();
+
+      final averageRating = (response['rating'] as num?)?.toDouble() ?? 0.0;
+      final phoneNumber = response['phone_number'] as String?;
+
       return SellerProfileData(
         ads: adList,
         reviews: reviewList,
         averageRating: averageRating,
+        phoneNumber: phoneNumber,
       );
     } catch (e) {
+      print("Error fetching seller profile: $e");
       throw Exception('Server Exception');
     }
   }

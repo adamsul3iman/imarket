@@ -1,8 +1,8 @@
+// lib/domain/repositories/profile_repository.dart
 import 'package:dartz/dartz.dart';
 import 'package:imarket/core/error/failures.dart';
-import 'package:imarket/presentation/blocs/profile/profile_bloc.dart';
+import 'package:imarket/domain/entities/user_profile.dart'; // ✅ FIX: تم تغيير المسار
 
 abstract class ProfileRepository {
-  // FIX: Updated the return type to match our error handling pattern
   Future<Either<Failure, UserProfile>> getUserProfile(String userId);
 }

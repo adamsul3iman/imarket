@@ -1,125 +1,64 @@
 import 'package:flutter/material.dart';
-import 'package:imarket/main.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:imarket/core/di/dependency_injection.dart';
+import 'package:imarket/presentation/blocs/blocked_users/blocked_users_bloc.dart';
 
-// موديل بسيط لتخزين بيانات المستخدم المحظور
-class BlockedUser {
-  final String id;
-  final String fullName;
-
-  BlockedUser({required this.id, required this.fullName});
-
-  factory BlockedUser.fromMap(Map<String, dynamic> map) {
-    return BlockedUser(
-      id: map['profiles']['id'] as String,
-      fullName: map['profiles']['full_name'] as String? ?? 'مستخدم محظور',
-    );
-  }
-}
-
-class BlockedUsersScreen extends StatefulWidget {
+/// شاشة تعرض قائمة بالمستخدمين الذين قام المستخدم الحالي بحظرهم.
+class BlockedUsersScreen extends StatelessWidget {
   const BlockedUsersScreen({super.key});
 
   @override
-  State<BlockedUsersScreen> createState() => _BlockedUsersScreenState();
-}
-
-class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
-  late Future<List<BlockedUser>> _blockedUsersFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _blockedUsersFuture = _fetchBlockedUsers();
-  }
-
-  /// جلب قائمة المستخدمين المحظورين من قاعدة البيانات
-  Future<List<BlockedUser>> _fetchBlockedUsers() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return [];
-    try {
-      final response = await supabase
-          .from('blocked_users')
-          .select('profiles!blocked_id(id, full_name)') // جلب بيانات الشخص المحظور
-          .eq('blocker_id', user.id);
-          
-      return response.map((item) => BlockedUser.fromMap(item)).toList();
-    } catch (e) {
-      debugPrint('Error fetching blocked users: $e');
-      rethrow;
-    }
-  }
-
-  /// إلغاء حظر مستخدم معين
-  Future<void> _unblockUser(String blockedId) async {
-    final user = supabase.auth.currentUser;
-    if (user == null) return;
-    try {
-      await supabase
-          .from('blocked_users')
-          .delete()
-          .match({'blocker_id': user.id, 'blocked_id': blockedId});
-      
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم إلغاء حظر المستخدم بنجاح.'), backgroundColor: Colors.green),
-        );
-        // تحديث القائمة بعد إلغاء الحظر
-        setState(() {
-          _blockedUsersFuture = _fetchBlockedUsers();
-        });
-      }
-    } catch(e) {
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ: ${e.toString()}'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('المستخدمين المحظورين'),
-      ),
-      body: FutureBuilder<List<BlockedUser>>(
-        future: _blockedUsersFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text('حدث خطأ في تحميل القائمة.'));
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-              child: Text('قائمة الحظر فارغة.'),
-            );
-          }
+    return BlocProvider(
+      create: (context) => getIt<BlockedUsersBloc>()..add(FetchBlockedUsers()),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('المستخدمين المحظورين'),
+        ),
+        body: BlocBuilder<BlockedUsersBloc, BlockedUsersState>(
+          builder: (context, state) {
+            if (state.status == BlockedUsersStatus.loading ||
+                state.status == BlockedUsersStatus.initial) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (state.status == BlockedUsersStatus.failure) {
+              return Center(
+                  child:
+                      Text(state.errorMessage ?? 'حدث خطأ في تحميل القائمة.'));
+            }
+            if (state.users.isEmpty) {
+              return const Center(child: Text('قائمة الحظر فارغة.'));
+            }
 
-          final blockedUsers = snapshot.data!;
-          return ListView.builder(
-            itemCount: blockedUsers.length,
-            itemBuilder: (context, index) {
-              final blockedUser = blockedUsers[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    child: Text(blockedUser.fullName.isNotEmpty ? blockedUser.fullName[0].toUpperCase() : '?'),
+            final blockedUsers = state.users;
+            return ListView.builder(
+              itemCount: blockedUsers.length,
+              itemBuilder: (context, index) {
+                final blockedUser = blockedUsers[index];
+                return Card(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      child: Text(blockedUser.fullName.isNotEmpty
+                          ? blockedUser.fullName[0].toUpperCase()
+                          : '?'),
+                    ),
+                    title: Text(blockedUser.fullName),
+                    trailing: ElevatedButton(
+                      onPressed: () => context
+                          .read<BlockedUsersBloc>()
+                          .add(UnblockUser(blockedUser.id)),
+                      style:
+                          ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                      child: const Text('إلغاء الحظر'),
+                    ),
                   ),
-                  title: Text(blockedUser.fullName),
-                  trailing: ElevatedButton(
-                    onPressed: () => _unblockUser(blockedUser.id),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                    child: const Text('إلغاء الحظر'),
-                  ),
-                ),
-              );
-            },
-          );
-        },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

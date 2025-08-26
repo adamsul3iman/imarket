@@ -9,7 +9,13 @@ abstract class FavoritesEvent extends Equatable {
 }
 
 class LoadFavoritesEvent extends FavoritesEvent {}
-class ToggleEditModeEvent extends FavoritesEvent {}
+class ToggleFavoriteEvent extends FavoritesEvent {
+  final String adId;
+  const ToggleFavoriteEvent({required this.adId});
+
+  @override
+  List<Object> get props => [adId];
+}
 class SelectFavoriteItemEvent extends FavoritesEvent {
   final String adId;
   const SelectFavoriteItemEvent(this.adId);

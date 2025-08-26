@@ -1,7 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:imarket/domain/entities/ad.dart';
 
-
 // We are moving the Review model to the domain layer as an entity
 class ReviewEntity extends Equatable {
   final String reviewerName;
@@ -24,23 +23,25 @@ class ReviewEntity extends Equatable {
       createdAt: DateTime.parse(map['created_at'] as String),
     );
   }
-  
+
   @override
   List<Object?> get props => [reviewerName, rating, comment, createdAt];
 }
-
 
 class SellerProfileData extends Equatable {
   final List<Ad> ads;
   final List<ReviewEntity> reviews;
   final double averageRating;
+  final String? phoneNumber; // ✅ FIX: Add this line
 
   const SellerProfileData({
     required this.ads,
     required this.reviews,
     required this.averageRating,
+    this.phoneNumber, // ✅ FIX: Add this to the constructor
   });
 
   @override
-  List<Object?> get props => [ads, reviews, averageRating];
+  List<Object?> get props =>
+      [ads, reviews, averageRating, phoneNumber]; // ✅ FIX: Add phoneNumber here
 }

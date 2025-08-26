@@ -1,65 +1,57 @@
-// supabase/functions/create-checkout-session/index.ts
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.4.0';
+import Stripe from "https://esm.sh/stripe@12.12.0?target=deno";
+
+// ✅ FIX: Define CORS headers to allow requests from any origin (*).
+// For production, you might want to restrict this to your actual website URL.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const stripe = Stripe(Deno.env.get("STRIPE_SECRET_KEY"), {
+  apiVersion: "2022-11-15",
+  httpClient: Stripe.createFetchHttpClient(),
+});
 
 serve(async (req) => {
-  if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+  // This is needed for the browser's preflight request.
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
-
-  const { amount, currency, description, email, name, userId } = await req.json();
-
-  // احصل على مفتاح Tap API السري من متغيرات البيئة
-  const TAP_SECRET_KEY = Deno.env.get('TAP_SECRET_KEY');
-  if (!TAP_SECRET_KEY) {
-    return new Response('Tap API key not found.', { status: 500 });
-  }
-
-  // بيانات الشحنة (Charge) لـ Tap
-  const chargeData = {
-    amount: amount,
-    currency: currency,
-    description: description,
-    statement_descriptor: 'iMarket JO Subscription',
-    metadata: { userId: userId },
-    customer: {
-      first_name: name,
-      email: email,
-    },
-    source: { id: 'src_all' },
-    redirect: {
-      url: `${Deno.env.get('SUPABASE_URL')}/success`,
-    },
-  };
 
   try {
-    // استدعاء Tap API لإنشاء جلسة الدفع
-    const tapResponse = await fetch('https://api.tap.company/v2/charges', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${TAP_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(chargeData),
+    const { amount, description, userId } = await req.json();
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "jod",
+            product_data: {
+              name: description || "iMarket JO Purchase",
+            },
+            unit_amount: Math.round(amount * 1000),
+          },
+          quantity: 1,
+        },
+      ],
+      mode: "payment",
+      success_url: `http://localhost:3000/payment/success`, // Use a placeholder for now
+      cancel_url: `http://localhost:3000/payment/cancel`,
+      client_reference_id: userId, 
     });
 
-    const tapResult = await tapResponse.json();
+    return new Response(JSON.stringify({ url: session.url }), {
+      // ✅ FIX: Add CORS headers to the success response.
+      headers: { ...corsHeaders, "Content-Type": "application/json" }, 
+    });
 
-    // تحقق من نجاح العملية وإرجاع رابط الدفع
-    if (tapResult && tapResult.transaction && tapResult.transaction.url) {
-      return new Response(JSON.stringify({ url: tapResult.transaction.url }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } else {
-      debugPrint('Tap API Error:', tapResult.errors);
-      return new Response(JSON.stringify({ error: tapResult.errors }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-  } catch (e) {
-    debugPrint("Error creating Tap charge: ", e);
-    return new Response('Failed to create Tap checkout session.', { status: 500 });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 400,
+      // ✅ FIX: Add CORS headers to the error response.
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

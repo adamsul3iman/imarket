@@ -26,30 +26,27 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }
 
   Future<void> _onFetchAds(FetchAdsEvent event, Emitter<HomeState> emit) async {
-    emit(HomeLoading());
+    // We only show the full-page loading shimmer on the initial fetch
+    if (state is! HomeLoaded) {
+      emit(HomeLoading());
+    }
 
-    // --- FIX: A cleaner, safer way to handle multiple async calls ---
-
-    // 1. Await the first call
+    // FIX: Use the searchText and filters from the event when calling the UseCase
     final adsResult = await _fetchAdsUseCase.call(FetchAdsParams(
       searchText: event.searchText,
       filters: event.filters,
       page: event.page,
     ));
 
-    // 2. Handle the result. If it's a failure, emit Error and stop.
-    // This is called a "guard clause" or "early exit".
     List<Ad> ads = [];
     adsResult.fold(
       (failure) => emit(HomeError(message: failure.message)),
       (successAds) => ads = successAds,
     );
-    if (adsResult.isLeft()) return; // Stop if there was an error
+    if (adsResult.isLeft()) return;
 
-    // 3. If the first call succeeded, await the second call
     final favoritesResult = await _getFavoritesUseCase.call(NoParams());
 
-    // 4. Handle the second result.
     favoritesResult.fold(
       (failure) => emit(HomeError(message: failure.message)),
       (favoriteAdIds) => emit(HomeLoaded(ads: ads, favoriteAdIds: favoriteAdIds)),
@@ -79,7 +76,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         (failure) {
           emit(HomeLoaded(ads: currentState.ads, favoriteAdIds: oldFavorites));
         },
-        (_) => null,
+        (_) {},
       );
     }
   }

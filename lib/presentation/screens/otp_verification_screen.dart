@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:imarket/main.dart';
+import 'package:imarket/core/di/dependency_injection.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// شاشة للتحقق من رمز OTP الذي يتم إرساله إلى هاتف المستخدم.
 class OtpVerificationScreen extends StatefulWidget {
   final String phoneNumber;
-  final OtpType otpType; // <<<--- إضافة متغير جديد لتحديد نوع التحقق
+  final OtpType otpType;
 
   const OtpVerificationScreen({
-    super.key, 
+    super.key,
     required this.phoneNumber,
-    required this.otpType, // جعله مطلوبًا
+    required this.otpType,
   });
 
   @override
@@ -22,37 +23,42 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   Future<void> _verifyOtp() async {
     if (_otpController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('الرجاء إدخال الرمز.'), backgroundColor: Colors.red),
-        );
-        return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('الرجاء إدخال الرمز.'), backgroundColor: Colors.red),
+      );
+      return;
     }
     setState(() => _isLoading = true);
     try {
+      final supabase = getIt<SupabaseClient>();
       await supabase.auth.verifyOTP(
         phone: widget.phoneNumber,
         token: _otpController.text.trim(),
-        type: widget.otpType, // <<<--- استخدام النوع الصحيح هنا
+        type: widget.otpType,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم تأكيد رقم الهاتف بنجاح!'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('تم تأكيد رقم الهاتف بنجاح!'),
+              backgroundColor: Colors.green),
         );
-        // العودة إلى شاشة حسابي
         int count = 0;
         Navigator.of(context).popUntil((_) => count++ >= 2);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('رمز خاطئ أو حدث خطأ'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text('رمز خاطئ أو حدث خطأ'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -62,7 +68,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('تم إرسال رمز مكون من 6 أرقام إلى الرقم: ${widget.phoneNumber}', textAlign: TextAlign.center),
+            Text(
+                'تم إرسال رمز مكون من 6 أرقام إلى الرقم: ${widget.phoneNumber}',
+                textAlign: TextAlign.center),
             const SizedBox(height: 24),
             TextFormField(
               controller: _otpController,
@@ -73,8 +81,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             ),
             const SizedBox(height: 24),
             _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : ElevatedButton(onPressed: _verifyOtp, child: const Text('تأكيد')),
+                ? const Center(child: CircularProgressIndicator())
+                : ElevatedButton(
+                    onPressed: _verifyOtp, child: const Text('تأكيد')),
           ],
         ),
       ),

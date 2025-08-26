@@ -1,17 +1,20 @@
-// lib/presentation/screens/ad_details_screen.dart
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:imarket/core/di/dependency_injection.dart';
 import 'package:imarket/domain/entities/ad.dart';
 import 'package:imarket/presentation/blocs/ad_details/ad_details_bloc.dart';
+import 'package:imarket/presentation/blocs/home/home_bloc.dart';
 import 'package:imarket/presentation/screens/full_screen_image_viewer.dart';
+import 'package:imarket/presentation/widgets/ad_card.dart';
 import 'package:imarket/presentation/widgets/report_dialog.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// شاشة تعرض جميع تفاصيل إعلان معين.
 class AdDetailsScreen extends StatefulWidget {
   final Ad ad;
   final String heroTagPrefix;
@@ -35,6 +38,7 @@ class _AdDetailsScreenState extends State<AdDetailsScreen> {
     initializeDateFormatting('ar');
   }
 
+  /// تشارك رابط الإعلان والنص عبر تطبيقات أخرى.
   Future<void> _shareAd(BuildContext context) async {
     final adLink = "https://your-app-website.com/ad/${widget.ad.id}";
     final shareText = '''
@@ -46,7 +50,6 @@ ${widget.ad.title}
 شاهد المزيد هنا: $adLink
 ''';
     final box = context.findRenderObject() as RenderBox?;
-
     if (box != null) {
       Share.share(
         shareText,
@@ -56,6 +59,7 @@ ${widget.ad.title}
     }
   }
 
+  /// تفتح رابط URL في تطبيق خارجي.
   Future<void> _launchUrlHelper(String url) async {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
@@ -67,6 +71,7 @@ ${widget.ad.title}
     }
   }
 
+  /// تعرض نافذة الإبلاغ عن الإعلان.
   void _showReportDialog(BuildContext context, AdDetailsBloc bloc) {
     showDialog(
       context: context,
@@ -84,32 +89,29 @@ ${widget.ad.title}
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return BlocProvider(
-      create: (context) => getIt<AdDetailsBloc>()
-        ..add(LoadAdDetailsEvent(adId: widget.ad.id, userId: widget.ad.userId)),
-      child: BlocListener<AdDetailsBloc, AdDetailsState>(
-        listener: (context, state) {
-          if (state is AdDetailsActionSuccess) {
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.green,
-              ));
-          } else if (state is AdDetailsActionFailure) {
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red,
-              ));
-          } else if (state is AdDetailsLaunchUrl) {
-            _launchUrlHelper(state.url);
-          }
-        },
-        child: Scaffold(
-          bottomNavigationBar: _buildContactBar(context, widget.ad),
-          body: CustomScrollView(
+    return BlocListener<AdDetailsBloc, AdDetailsState>(
+      listener: (context, state) {
+        if (state is AdDetailsActionSuccess) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(
+              content: Text(state.message),
+              backgroundColor: Colors.green,
+            ));
+        } else if (state is AdDetailsActionFailure) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(
+              content: Text(state.message),
+              backgroundColor: Colors.red,
+            ));
+        } else if (state is AdDetailsLaunchUrl) {
+          _launchUrlHelper(state.url);
+        }
+      },
+      child: Scaffold(
+        bottomNavigationBar: _buildContactBar(context, widget.ad),
+        body: CustomScrollView(
             slivers: [
               _buildSliverAppBarWithCarousel(context),
               SliverToBoxAdapter(
@@ -136,8 +138,11 @@ ${widget.ad.title}
                         const Divider(height: 32),
                       ],
                       _buildSectionTitle('الملحقات المرفقة', textTheme),
-                      _buildAccessoryItem('العلبة الأصلية', widget.ad.hasBox ?? false),
-                      _buildAccessoryItem('الشاحن الأصلي', widget.ad.hasCharger ?? false),
+                      _buildAccessoryItem(
+                          'العلبة الأصلية', widget.ad.hasBox ?? false),
+                      _buildAccessoryItem(
+                          'الشاحن الأصلي', widget.ad.hasCharger ?? false),
+                      _buildRelatedAdsSection(context),
                     ],
                   ),
                 ),
@@ -145,6 +150,72 @@ ${widget.ad.title}
             ],
           ),
         ),
+    );
+  }
+
+  /// تبني قسم "الإعلانات المشابهة" في أسفل الشاشة.
+  Widget _buildRelatedAdsSection(BuildContext context) {
+    return BlocProvider.value(
+      value: getIt<HomeBloc>(),
+      child: BlocBuilder<AdDetailsBloc, AdDetailsState>(
+        buildWhen: (p, c) {
+          if (p is AdDetailsLoaded && c is AdDetailsLoaded) {
+            return p.relatedAds != c.relatedAds;
+          }
+          return false;
+        },
+        builder: (context, adDetailsState) {
+          if (adDetailsState is AdDetailsLoaded &&
+              adDetailsState.relatedAds.isNotEmpty) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 32),
+                _buildSectionTitle(
+                    'إعلانات مشابهة', Theme.of(context).textTheme),
+                SizedBox(
+                  height: 250,
+                  child: BlocBuilder<HomeBloc, HomeState>(
+                    builder: (context, homeState) {
+                      final favoriteAdIds = homeState is HomeLoaded
+                          ? homeState.favoriteAdIds
+                          : <String>{};
+                      return ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: adDetailsState.relatedAds.length,
+                        itemBuilder: (context, index) {
+                          final relatedAd = adDetailsState.relatedAds[index];
+                          return SizedBox(
+                            width: 180,
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 16.0),
+                              child: AdCard(
+                                ad: relatedAd,
+                                heroTagPrefix: 'related',
+                                isFavorited:
+                                    favoriteAdIds.contains(relatedAd.id),
+                                onFavoriteToggle: () {
+                                  context
+                                      .read<HomeBloc>()
+                                      .add(ToggleFavoriteEvent(relatedAd.id));
+                                },
+                                onTap: () {
+                                  context.pushReplacement('/ad-details',
+                                      extra: relatedAd);
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          }
+          return const SizedBox.shrink();
+        },
       ),
     );
   }
@@ -177,7 +248,8 @@ ${widget.ad.title}
                   value: 'report',
                   child: ListTile(
                     leading: Icon(Icons.flag_outlined, color: Colors.red),
-                    title: Text('الإبلاغ عن هذا الإعلان', style: TextStyle(color: Colors.red)),
+                    title: Text('الإبلاغ عن هذا الإعلان',
+                        style: TextStyle(color: Colors.red)),
                   ),
                 ),
               ],
@@ -224,10 +296,12 @@ ${widget.ad.title}
                     child: CachedNetworkImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,
-                      placeholder: (context, u) => Container(color: Colors.grey.shade200),
+                      placeholder: (context, u) =>
+                          Container(color: Colors.grey.shade200),
                       errorWidget: (context, u, error) => Container(
                         color: Colors.grey.shade200,
-                        child: const Icon(Icons.broken_image_outlined, size: 60, color: Colors.grey),
+                        child: const Icon(Icons.broken_image_outlined,
+                            size: 60, color: Colors.grey),
                       ),
                     ),
                   );
@@ -276,7 +350,9 @@ ${widget.ad.title}
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: () {
-                  context.read<AdDetailsBloc>().add(LaunchCallEvent(phoneNumber: ad.phoneNumber ?? ''));
+                  context
+                      .read<AdDetailsBloc>()
+                      .add(LaunchCallEvent(phoneNumber: ad.phoneNumber ?? ''));
                 },
                 icon: const Icon(Icons.phone_outlined),
                 label: const Text('اتصال'),
@@ -292,9 +368,9 @@ ${widget.ad.title}
               child: ElevatedButton.icon(
                 onPressed: () {
                   context.read<AdDetailsBloc>().add(LaunchWhatsappEvent(
-                    phoneNumber: ad.phoneNumber ?? '',
-                    adTitle: ad.title,
-                  ));
+                        phoneNumber: ad.phoneNumber ?? '',
+                        adTitle: ad.title,
+                      ));
                 },
                 icon: const Icon(Icons.wechat_outlined),
                 label: const Text('واتساب'),
@@ -319,14 +395,16 @@ ${widget.ad.title}
         Expanded(
           child: Text(
             widget.ad.title,
-            style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style:
+                textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
         ),
         const SizedBox(width: 16),
         Chip(
           label: Text(
             '${widget.ad.price} دينار',
-            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+            style: const TextStyle(
+                fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
           ),
           backgroundColor: colorScheme.primary,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -358,7 +436,8 @@ ${widget.ad.title}
         if (state is AdDetailsLoaded) {
           return Card(
             elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: ListTile(
               contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
               leading: const CircleAvatar(child: Icon(Icons.person_outline)),
@@ -366,11 +445,19 @@ ${widget.ad.title}
               subtitle: const Text('عضو في iMarket'),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
-                // Navigate to seller profile screen
+                // ✅ FIX: Added the navigation logic here
+                context.push(
+                  '/seller-profile',
+                  extra: {
+                    'id': widget.ad.userId,
+                    'name': state.sellerName,
+                  },
+                );
               },
             ),
           );
         }
+        // Show a loading spinner while seller data is being fetched
         return const Center(child: CircularProgressIndicator());
       },
     );
@@ -379,12 +466,24 @@ ${widget.ad.title}
   Widget _buildSpecsGrid() {
     final specs = {
       if (widget.ad.conditionAr != null)
-        'الحالة': {'icon': Icons.bookmark_border, 'value': widget.ad.conditionAr},
-      'السعة': {'icon': Icons.storage_outlined, 'value': '${widget.ad.storage} GB'},
+        'الحالة': {
+          'icon': Icons.bookmark_border,
+          'value': widget.ad.conditionAr
+        },
+      'السعة': {
+        'icon': Icons.storage_outlined,
+        'value': '${widget.ad.storage} GB'
+      },
       if (widget.ad.colorAr != null)
-        'اللون': {'icon': Icons.color_lens_outlined, 'value': widget.ad.colorAr},
+        'اللون': {
+          'icon': Icons.color_lens_outlined,
+          'value': widget.ad.colorAr
+        },
       if (widget.ad.batteryHealth != null)
-        'البطارية': {'icon': Icons.battery_charging_full, 'value': '${widget.ad.batteryHealth}%'},
+        'البطارية': {
+          'icon': Icons.battery_charging_full,
+          'value': '${widget.ad.batteryHealth}%'
+        },
     };
     specs.removeWhere((key, value) => value['value'] == null);
 
@@ -428,10 +527,12 @@ ${widget.ad.title}
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(label,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey)),
                   Text(
                     value,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],

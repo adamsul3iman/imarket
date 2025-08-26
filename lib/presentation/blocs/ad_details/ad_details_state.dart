@@ -14,14 +14,28 @@ class AdDetailsLoading extends AdDetailsState {}
 class AdDetailsLoaded extends AdDetailsState {
   final String sellerName;
   final bool isOwnAd;
+  final List<Ad> relatedAds; // NEW: تم إضافة relatedAds
 
   const AdDetailsLoaded({
     required this.sellerName,
     required this.isOwnAd,
+    this.relatedAds = const [],
   });
 
+  AdDetailsLoaded copyWith({
+    String? sellerName,
+    bool? isOwnAd,
+    List<Ad>? relatedAds,
+  }) {
+    return AdDetailsLoaded(
+      sellerName: sellerName ?? this.sellerName,
+      isOwnAd: isOwnAd ?? this.isOwnAd,
+      relatedAds: relatedAds ?? this.relatedAds,
+    );
+  }
+
   @override
-  List<Object?> get props => [sellerName, isOwnAd];
+  List<Object?> get props => [sellerName, isOwnAd, relatedAds];
 }
 
 class AdDetailsError extends AdDetailsState {
@@ -38,18 +52,15 @@ abstract class AdDetailsActionState extends AdDetailsState {}
 
 class AdDetailsActionSuccess extends AdDetailsActionState {
   final String message;
-  // FIX: Removed 'const' because super constructor is not const
   AdDetailsActionSuccess({required this.message});
 }
 
 class AdDetailsActionFailure extends AdDetailsActionState {
   final String message;
-  // FIX: Removed 'const'
   AdDetailsActionFailure({required this.message});
 }
 
 class AdDetailsLaunchUrl extends AdDetailsActionState {
   final String url;
-  // FIX: Removed 'const'
   AdDetailsLaunchUrl({required this.url});
 }

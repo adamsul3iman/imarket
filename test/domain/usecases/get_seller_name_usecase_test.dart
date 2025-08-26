@@ -1,7 +1,6 @@
 // test/domain/usecases/get_seller_name_usecase_test.dart
 import 'package:dartz/dartz.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imarket/core/error/failures.dart';
 import 'package:imarket/domain/repositories/ad_repository.dart';
 import 'package:imarket/domain/usecases/get_seller_name_usecase.dart';
 import 'package:mocktail/mocktail.dart';

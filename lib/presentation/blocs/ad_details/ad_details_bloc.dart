@@ -1,5 +1,7 @@
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:imarket/domain/entities/ad.dart';
+import 'package:imarket/domain/usecases/fetch_ads_usecase.dart';
 import 'package:imarket/domain/usecases/get_seller_name_usecase.dart';
 import 'package:imarket/domain/usecases/increment_call_click_usecase.dart';
 import 'package:imarket/domain/usecases/increment_view_count_usecase.dart';
@@ -19,6 +21,7 @@ class AdDetailsBloc extends Bloc<AdDetailsEvent, AdDetailsState> {
   final IncrementCallClicksUseCase _incrementCallClicksUseCase;
   final ReportAdUseCase _reportAdUseCase;
   final SupabaseClient _supabaseClient;
+  final FetchAdsUseCase _fetchAdsUseCase;
 
   String _currentAdId = '';
   String _currentAdUserId = '';
@@ -30,6 +33,7 @@ class AdDetailsBloc extends Bloc<AdDetailsEvent, AdDetailsState> {
     this._incrementCallClicksUseCase,
     this._reportAdUseCase,
     this._supabaseClient,
+    this._fetchAdsUseCase,
   ) : super(AdDetailsInitial()) {
     on<LoadAdDetailsEvent>(_onLoadDetails);
     on<ReportAdEvent>(_onReportAd);
@@ -42,21 +46,47 @@ class AdDetailsBloc extends Bloc<AdDetailsEvent, AdDetailsState> {
     _currentAdId = event.adId;
     _currentAdUserId = event.userId;
 
-    // FIX: Added 'await' to ensure the handler doesn't complete
-    // before this asynchronous operation finishes.
-    await _incrementViewCountUseCase.call(event.adId);
+    // Fire-and-forget the view count increment.
+    _incrementViewCountUseCase.call(event.adId);
 
-    final result = await _getSellerNameUseCase.call(event.userId);
-    result.fold(
-      (failure) => emit(AdDetailsError(message: failure.message)),
+    // Fetch seller name and related ads in parallel to be more efficient.
+    final results = await Future.wait([
+      _getSellerNameUseCase.call(event.userId),
+      _fetchAdsUseCase.call(FetchAdsParams(
+        searchText: '',
+        filters: {'model': event.model},
+        page: 0,
+      )),
+    ]);
+
+    final sellerNameResult = results[0] as dynamic;
+    final relatedAdsResult = results[1] as dynamic;
+
+    // Process the results and emit ONE final state.
+    sellerNameResult.fold(
+      (failure) {
+        emit(AdDetailsError(message: failure.message));
+      },
       (sellerName) {
         final isOwnAd = _supabaseClient.auth.currentUser?.id == event.userId;
-        emit(AdDetailsLoaded(sellerName: sellerName, isOwnAd: isOwnAd));
+        
+        relatedAdsResult.fold(
+          (failure) {
+            // If related ads fail, we still succeed but with an empty list.
+            emit(AdDetailsLoaded(sellerName: sellerName, isOwnAd: isOwnAd, relatedAds: []));
+          },
+          (ads) {
+            final filteredAds = ads.where((ad) => ad.id != _currentAdId).toList();
+            // This is the single, final success state with all data.
+            emit(AdDetailsLoaded(sellerName: sellerName, isOwnAd: isOwnAd, relatedAds: filteredAds));
+          },
+        );
       },
     );
   }
 
-  Future<void> _onReportAd(ReportAdEvent event, Emitter<AdDetailsState> emit) async {
+  Future<void> _onReportAd(
+      ReportAdEvent event, Emitter<AdDetailsState> emit) async {
     final result = await _reportAdUseCase.call(ReportAdParams(
       adId: _currentAdId,
       userId: _currentAdUserId,
@@ -70,17 +100,42 @@ class AdDetailsBloc extends Bloc<AdDetailsEvent, AdDetailsState> {
     );
   }
 
-  Future<void> _onLaunchWhatsapp(LaunchWhatsappEvent event, Emitter<AdDetailsState> emit) async {
+  Future<void> _onLoadRelatedAds(
+      LoadRelatedAdsEvent event, Emitter<AdDetailsState> emit) async {
+    if (state is AdDetailsLoaded) {
+      final currentState = state as AdDetailsLoaded;
+      final result = await _fetchAdsUseCase.call(FetchAdsParams(
+        searchText: '',
+        filters: {'model': event.model},
+        page: 0,
+      ));
+
+      result.fold(
+        (failure) {
+          // يمكننا إرسال رسالة خطأ، لكننا سنكتفي بعدم تحديث القائمة
+        },
+        (ads) {
+          final filteredAds = ads.where((ad) => ad.id != _currentAdId).toList();
+          emit(currentState.copyWith(relatedAds: filteredAds));
+        },
+      );
+    }
+  }
+
+  Future<void> _onLaunchWhatsapp(
+      LaunchWhatsappEvent event, Emitter<AdDetailsState> emit) async {
     if (event.phoneNumber.isEmpty) {
       emit(AdDetailsActionFailure(message: 'رقم هاتف البائع غير متوفر.'));
       return;
     }
     await _incrementWhatsappClicksUseCase.call(_currentAdId);
-    final url = 'https://wa.me/${event.phoneNumber}?text=أنا مهتم بإعلانك "${event.adTitle}" على تطبيق iMarket JO';
+    final url =
+        'https://wa.me/${event.phoneNumber}?text=أنا مهتم بإعلانك "${event.adTitle}" على تطبيق iMarket JO';
     emit(AdDetailsLaunchUrl(url: url));
   }
-  
-  Future<void> _onLaunchCall(LaunchCallEvent event, Emitter<AdDetailsState> emit) async {
+
+  Future<void> _onLaunchCall(
+      LaunchCallEvent event, Emitter<AdDetailsState> emit) async {
     if (event.phoneNumber.isEmpty) {
       emit(AdDetailsActionFailure(message: 'رقم هاتف البائع غير متوفر.'));
       return;

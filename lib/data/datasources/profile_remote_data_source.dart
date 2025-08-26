@@ -1,8 +1,8 @@
 // lib/data/datasources/profile_remote_data_source.dart
-import 'package:imarket/presentation/blocs/profile/profile_bloc.dart';
+import 'package:imarket/domain/entities/user_profile.dart'; // ✅ FIX: تم تغيير المسار
 import 'package:injectable/injectable.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ FIX
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 abstract class ProfileRemoteDataSource {
   Future<UserProfile> getUserProfile(String userId);

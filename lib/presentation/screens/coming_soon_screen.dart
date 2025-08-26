@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// A reusable placeholder screen for features that are not yet implemented.
+/// شاشة مؤقتة قابلة لإعادة الاستخدام للميزات التي لم يتم تنفيذها بعد.
 class ComingSoonScreen extends StatelessWidget {
   final String featureName;
   const ComingSoonScreen({super.key, required this.featureName});

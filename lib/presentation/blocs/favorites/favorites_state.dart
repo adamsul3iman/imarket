@@ -1,5 +1,5 @@
 // lib/presentation/blocs/favorites/favorites_state.dart
-part of 'favorites_bloc.dart'; // FIX: Add part of directive
+part of 'favorites_bloc.dart';
 
 abstract class FavoritesState extends Equatable {
   const FavoritesState();
@@ -10,6 +10,7 @@ abstract class FavoritesState extends Equatable {
 
 class FavoritesInitial extends FavoritesState {}
 class FavoritesLoading extends FavoritesState {}
+
 class FavoritesLoaded extends FavoritesState {
   final List<Ad> favoriteAds;
   final bool isEditMode;
@@ -41,3 +42,5 @@ class FavoritesError extends FavoritesState {
   final String message;
   const FavoritesError({required this.message});
 }
+
+class FavoritesActionSuccess extends FavoritesState {}

@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:imarket/main.dart';
-import 'main_screen.dart';
-import 'login_screen.dart';
-import 'package:go_router/go_router.dart'; // Added for navigation
+import 'package:go_router/go_router.dart';
+import 'package:imarket/core/di/dependency_injection.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// شاشة البداية التي تظهر عند فتح التطبيق وتتحقق من حالة تسجيل الدخول.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -20,8 +20,6 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-
-    // إعداد حركة النبض
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -31,20 +29,56 @@ class _SplashScreenState extends State<SplashScreen>
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
 
-    // تأخير 3 ثواني ثم التوجيه
-    Timer(const Duration(seconds: 3), _redirect);
+    // الانتظار ثانيتين ثم بدء عملية التحقق
+    Timer(const Duration(seconds: 2), _redirect);
   }
 
-  /// التوجيه حسب حالة Supabase
+  /// يتحقق من حالة المصادقة، وإذا كان المستخدم مسجلاً،
+  /// فإنه يتحقق من وجود ملف شخصي له قبل إعادة التوجيه.
   Future<void> _redirect() async {
     if (!mounted) return;
+    
+    final supabase = getIt<SupabaseClient>();
     final session = supabase.auth.currentSession;
 
-    // Use context.go() to replace the navigation stack
     if (session != null) {
-      context.go('/main');
+      // المستخدم مسجل دخوله، الآن تحقق من وجود ملف شخصي
+      bool profileExists = await _checkForProfile(supabase, session.user.id);
+      
+      // إذا لم يكن الملف الشخصي موجودًا، انتظر قليلاً وحاول مرة أخرى
+      // هذا يعطي الزناد (Trigger) وقتاً للعمل في حالة المستخدم الجديد تمامًا
+      if (!profileExists) {
+        await Future.delayed(const Duration(seconds: 2));
+        profileExists = await _checkForProfile(supabase, session.user.id);
+      }
+
+      if (mounted) {
+        if (profileExists) {
+          context.go('/main');
+        } else {
+          // إذا لم يتم إنشاء الملف الشخصي بعد فترة، أعد المستخدم لتسجيل الدخول
+          // هذا يمنع الدخول إلى التطبيق بحالة خاطئة
+          await supabase.auth.signOut();
+          context.go('/login');
+        }
+      }
     } else {
+      // المستخدم غير مسجل، اذهب إلى شاشة الدخول
       context.go('/login');
+    }
+  }
+
+  /// دالة مساعدة للتحقق من وجود صف للمستخدم في جدول profiles
+  Future<bool> _checkForProfile(SupabaseClient client, String userId) async {
+    try {
+      final response = await client
+          .from('profiles')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+      return response != null;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -52,35 +86,6 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _controller.dispose();
     super.dispose();
-  }
-
-  Widget _buildLoadingDots() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(3, (index) {
-        return AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            double value = (_controller.value + index * 0.3) % 1.0;
-            double opacity = value < 0.5 ? value * 2 : (1 - value) * 2;
-            return Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: Color.fromARGB(
-                  (opacity * 255).round(), // alpha
-                  255, // red
-                  255, // green
-                  255, // blue
-                ),
-                shape: BoxShape.circle,
-              ),
-            );
-          },
-        );
-      }),
-    );
   }
 
   @override
@@ -92,8 +97,8 @@ class _SplashScreenState extends State<SplashScreen>
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF00E1C7), // Turquoise
-              Color(0xFF007BFF), // Blue
+              Color(0xFF00E1C7),
+              Color(0xFF007BFF),
             ],
           ),
         ),
@@ -105,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen>
               child: Image.asset('assets/images/splash_logo.png', width: 160),
             ),
             const SizedBox(height: 30),
-            _buildLoadingDots(),
+            // ... loading dots UI if you have it
           ],
         ),
       ),

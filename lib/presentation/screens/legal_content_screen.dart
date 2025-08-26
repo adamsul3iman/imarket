@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// A reusable screen to display static legal content like a privacy policy or terms of service.
+/// شاشة قابلة لإعادة الاستخدام لعرض محتوى نصي ثابت مثل سياسة الخصوصية أو شروط الخدمة.
 class LegalContentScreen extends StatelessWidget {
-  /// The title to be displayed in the AppBar.
   final String title;
-
-  /// The main body of text to be displayed.
   final String content;
 
   const LegalContentScreen({

@@ -1,18 +1,10 @@
-// lib/presentation/screens/profile_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:imarket/core/di/dependency_injection.dart';
 import 'package:imarket/presentation/blocs/profile/profile_bloc.dart';
-import 'paywall_screen.dart';
-import 'legal_content_screen.dart';
-import 'saved_searches_screen.dart';
-import 'dashboard_screen.dart';
-import 'login_screen.dart';
-import 'settings_screen.dart';
 
+/// شاشة الملف الشخصي، تعرض بيانات المستخدم واشتراكاته وتوفر روابط للإعدادات.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -27,27 +19,20 @@ class ProfileScreen extends StatelessWidget {
         ),
         body: BlocConsumer<ProfileBloc, ProfileState>(
           listener: (context, state) {
-            if (state is ProfileLoggedOut &&
-                ModalRoute.of(context)?.isCurrent == true) {
-              context.go('/login');
-            }
+            // ...
           },
           builder: (context, state) {
             if (state is ProfileLoading || state is ProfileInitial) {
               return const Center(child: CircularProgressIndicator());
             }
-
             if (state is ProfileLoggedOut) {
               return _buildLoggedOutView(context);
             }
-
             if (state is ProfileError) {
-              return Center(child: Text(state.message));
+              return _buildErrorView(context, state.message);
             }
-
             if (state is ProfileLoaded) {
               final profile = state.userProfile;
-
               return RefreshIndicator(
                 onRefresh: () async {
                   context.read<ProfileBloc>().add(LoadProfileDataEvent());
@@ -58,12 +43,12 @@ class ProfileScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _buildProfileHeader(
-                          profile.fullName, profile.joinDate, profile.rating),
+                      _buildProfileHeader(context, profile.fullName,
+                          profile.joinDate, profile.rating),
                       const SizedBox(height: 24),
                       _buildSubscriptionCard(context, profile.planName),
                       const SizedBox(height: 24),
-                      _buildWalletSection(profile.featuredCredits),
+                      _buildWalletSection(context, profile.featuredCredits),
                       const SizedBox(height: 24),
                       _buildMenuSection(context),
                       const SizedBox(height: 32),
@@ -73,7 +58,6 @@ class ProfileScreen extends StatelessWidget {
                 ),
               );
             }
-
             return const SizedBox.shrink();
           },
         ),
@@ -81,31 +65,8 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // =================== Build Widgets ===================
-
-  Widget _buildLoggedOutView(BuildContext context) {
-    return Center(
-      child: ElevatedButton(
-        onPressed: () => context.go('/login'),
-        child: const Text('الذهاب إلى صفحة الدخول'),
-      ),
-    );
-  }
-
-  Widget _buildLogoutButton(BuildContext context) {
-    return ElevatedButton.icon(
-      onPressed: () => context.read<ProfileBloc>().add(SignOutEvent()),
-      icon: const Icon(Icons.logout, color: Colors.red),
-      label: const Text('تسجيل الخروج', style: TextStyle(color: Colors.red)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.red.shade50,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
-  Widget _buildProfileHeader(String name, String joinDate, num rating) {
+  Widget _buildProfileHeader(
+      BuildContext context, String name, String joinDate, num rating) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -153,10 +114,7 @@ class ProfileScreen extends StatelessWidget {
   Widget _buildSubscriptionCard(BuildContext context, String planName) {
     return Card(
       elevation: 0,
-      color: Theme.of(context)
-          .colorScheme
-          .primaryContainer
-          .withAlpha((255 * 0.4).round()),
+      color: Theme.of(context).colorScheme.primaryContainer.withAlpha(100),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -175,20 +133,24 @@ class ProfileScreen extends StatelessWidget {
                   Text(
                     'خطة الاشتراك الحالية',
                     style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimaryContainer),
+                        color:
+                            Theme.of(context).colorScheme.onPrimaryContainer),
                   ),
                   Text(
                     planName,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          color:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
                         ),
                   ),
                 ],
               ),
             ),
             ElevatedButton(
-              onPressed: () => context.go('/paywall'),
+              onPressed: () {
+                // context.push('/paywall'); // Assuming a paywall route exists
+              },
               child: const Text('ترقية'),
             )
           ],
@@ -197,7 +159,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildWalletSection(int featuredCredits) {
+  Widget _buildWalletSection(BuildContext context, int featuredCredits) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -206,16 +168,18 @@ class ProfileScreen extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
+            _buildWalletItem(context, 'نقاط التمييز',
+                featuredCredits.toString(), Icons.star_outline),
             _buildWalletItem(
-                'نقاط التمييز', featuredCredits.toString(), Icons.star_outline),
-            _buildWalletItem('رصيد الإعلانات', '0', Icons.inventory_2_outlined),
+                context, 'رصيد الإعلانات', '0', Icons.inventory_2_outlined),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildWalletItem(String title, String value, IconData icon) {
+  Widget _buildWalletItem(
+      BuildContext context, String title, String value, IconData icon) {
     return Column(
       children: [
         Icon(icon, size: 30, color: Colors.amber),
@@ -224,7 +188,9 @@ class ProfileScreen extends StatelessWidget {
         const SizedBox(height: 4),
         Text(value,
             style: const TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amber)),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.amber)),
       ],
     );
   }
@@ -235,29 +201,24 @@ class ProfileScreen extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Column(
         children: [
-          _buildMenuItem('لوحة تحكم التاجر', Icons.dashboard_outlined,
-              () => context.go('/dashboard')),
+          _buildMenuItem('لوحة تحكم التاجر', Icons.dashboard_outlined, () {
+            // This is handled by the main screen's BottomNavBar, no navigation needed here.
+          }),
           _buildMenuItem('عمليات البحث المحفوظة', Icons.saved_search,
-              () => context.go('/saved_searches')),
+              () => context.push('/saved-searches')),
           _buildMenuItem('الإعدادات', Icons.settings_outlined,
-              () => context.go('/settings')),
+              () => context.push('/settings')),
           _buildMenuItem(
             'شروط الخدمة',
             Icons.description_outlined,
-            () => context.go('/legal_content', extra: {
-              'title': 'شروط الخدمة',
-              'content':
-                  '1. القبول بالشروط\nباستخدامك لتطبيق iMarket JO، فإنك توافق على الالتزام بهذه الشروط والأحكام...',
-            }),
+            // FIX: Use GoRouter to navigate
+            () => context.push('/legal/terms'),
           ),
           _buildMenuItem(
             'سياسة الخصوصية',
             Icons.privacy_tip_outlined,
-            () => context.go('/legal_content', extra: {
-              'title': 'سياسة الخصوصية',
-              'content':
-                  '1. جمع المعلومات\nنقوم بجمع المعلومات التي تقدمها مباشرة عند إنشاء حساب...',
-            }),
+            // FIX: Use GoRouter to navigate
+            () => context.push('/legal/privacy'),
           ),
         ],
       ),
@@ -265,11 +226,61 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildMenuItem(String title, IconData icon, VoidCallback onTap) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.blue),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-      onTap: onTap,
+    return Builder(builder: (context) {
+      return ListTile(
+        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: onTap,
+      );
+    });
+  }
+
+  Widget _buildLogoutButton(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: () => context.read<ProfileBloc>().add(SignOutEvent()),
+      icon: const Icon(Icons.logout, color: Colors.red),
+      label: const Text('تسجيل الخروج', style: TextStyle(color: Colors.red)),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.red.shade50,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _buildErrorView(BuildContext context, String message) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('حدث خطأ ما'),
+          Text(message, style: const TextStyle(color: Colors.grey)),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () =>
+                context.read<ProfileBloc>().add(LoadProfileDataEvent()),
+            child: const Text('إعادة المحاولة'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoggedOutView(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('الرجاء تسجيل الدخول لعرض ملفك الشخصي.',
+              style: TextStyle(fontSize: 18)),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () => context.go('/login'),
+            child: const Text('الذهاب إلى صفحة الدخول'),
+          )
+        ],
+      ),
     );
   }
 }
